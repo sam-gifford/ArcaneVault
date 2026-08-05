@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="assignment-brief.md" />
+  </Folder>
+  <Project Path="ArcaneVault.API/ArcaneVault.API.csproj" />
+  <Project Path="ArcaneVault.Web/ArcaneVault.Web.csproj" />
+</Solution>

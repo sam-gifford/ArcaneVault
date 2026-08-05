@@ -1,0 +1,52 @@
+@page "{categoryCode}"
+@model ArcaneVault.Web.Pages.Categories.DetailsModel
+
+@{
+    ViewData["Title"] = "Category Details";
+}
+
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-8">
+            <h1>Category Details</h1>
+            <hr />
+
+            @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+            {
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    @Model.ErrorMessage
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            }
+
+            @if (Model.Category != null)
+            {
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">@Model.Category.CategoryName</h5>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Category Code:</label>
+                            <p>@Model.Category.CategoryCode</p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Category Name:</label>
+                            <p>@Model.Category.CategoryName</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <a href="@Url.Page("./Edit", new { categoryCode = Model.Category.CategoryCode })" class="btn btn-warning">
+                        Edit
+                    </a>
+                    <a href="@Url.Page("./Delete", new { categoryCode = Model.Category.CategoryCode })" class="btn btn-danger">
+                        Delete
+                    </a>
+                    <a href="@Url.Page("./Index")" class="btn btn-secondary">
+                        Back to List
+                    </a>
+                </div>
+            }
+        </div>
+    </div>
+</div>
