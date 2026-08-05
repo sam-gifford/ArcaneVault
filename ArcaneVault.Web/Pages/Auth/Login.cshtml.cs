@@ -69,6 +69,7 @@ namespace ArcaneVault.Web.Pages.Auth
                         HttpContext.Session.SetString("UserName", userName);
                         HttpContext.Session.SetString("Email", email);
                         HttpContext.Session.SetString("Role", role);
+                        HttpContext.Session.SetString("UserRole", role);
 
                         // Create claims for cookie authentication
                         var claims = new List<Claim>
