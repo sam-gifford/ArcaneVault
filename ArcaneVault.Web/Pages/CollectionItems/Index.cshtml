@@ -1,0 +1,91 @@
+@* Name: [Your Name] | Admin No: [Your Admin No] | Tutorial Group: [Your Group] *@
+
+@page
+@model ArcaneVault.Web.Pages.CollectionItems.IndexModel
+@using System.Security.Claims
+
+@{
+    ViewData["Title"] = "My Collection Items";
+}
+
+<div class="container mt-5">
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <h1>My Collection Items</h1>
+        </div>
+        <div class="col-md-6 text-end">
+            <a href="@Url.Page("./Create")" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Add New Item
+            </a>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @Model.ErrorMessage
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+    @if (Model.CollectionItems.Count == 0)
+    {
+        <div class="alert alert-info">
+            No items in your collection yet. <a href="@Url.Page("./Create")">Add one now</a>.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Item Name</th>
+                        <th>Starting Quantity</th>
+                        <th>Current Quantity</th>
+                        <th>Categories</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.CollectionItems)
+                    {
+                        <tr>
+                            <td>
+                                <strong>@item.ItemName</strong>
+                            </td>
+                            <td>@item.StartingQuantity</td>
+                            <td>
+                                <span class="badge bg-info">@item.CurrentQuantity</span>
+                            </td>
+                            <td>
+                                @if (item.CategoryCodes.Count > 0)
+                                {
+                                    @foreach (var code in item.CategoryCodes)
+                                    {
+                                        <span class="badge bg-secondary">@code</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-muted">-</span>
+                                }
+                            </td>
+                            <td>
+                                <a href="@Url.Page("./Details", new { itemId = item.ItemId })" class="btn btn-sm btn-info">
+                                    View
+                                </a>
+                                <a href="@Url.Page("./Edit", new { itemId = item.ItemId })" class="btn btn-sm btn-warning">
+                                    Edit
+                                </a>
+                                <a href="@Url.Page("./Delete", new { itemId = item.ItemId })" class="btn btn-sm btn-danger">
+                                    Delete
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>

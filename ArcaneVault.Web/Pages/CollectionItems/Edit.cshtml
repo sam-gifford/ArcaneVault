@@ -1,0 +1,98 @@
+@* Name: [Your Name] | Admin No: [Your Admin No] | Tutorial Group: [Your Group] *@
+
+@page "{itemId}"
+@model ArcaneVault.Web.Pages.CollectionItems.EditModel
+
+@{
+    ViewData["Title"] = "Edit Collection Item";
+}
+
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-8">
+            <h1>Edit Collection Item</h1>
+            <hr />
+
+            @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+            {
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    @Model.ErrorMessage
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            }
+
+            @if (Model.Item != null)
+            {
+                <form method="post">
+                    <input type="hidden" asp-for="ItemId" />
+
+                    <div class="mb-3">
+                        <label asp-for="Item.ItemName" class="form-label">Item Name *</label>
+                        <input asp-for="Item.ItemName" class="form-control" required />
+                        <span asp-validation-for="Item.ItemName" class="text-danger"></span>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label asp-for="Item.StartingQuantity" class="form-label">Starting Quantity</label>
+                                <input type="number" asp-for="Item.StartingQuantity" class="form-control" min="0" />
+                                <span asp-validation-for="Item.StartingQuantity" class="text-danger"></span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label asp-for="Item.CurrentQuantity" class="form-label">Current Quantity</label>
+                                <input type="number" asp-for="Item.CurrentQuantity" class="form-control" min="0" />
+                                <span asp-validation-for="Item.CurrentQuantity" class="text-danger"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="selectedCategories" class="form-label">Categories</label>
+                        <small class="d-block text-muted mb-2">Select categories</small>
+                        @if (Model.AvailableCategories.Any())
+                        {
+                            <div class="mb-2">
+                                <div class="btn-group" role="group">
+                                    @foreach (var category in Model.AvailableCategories)
+                                    {
+                                        var isSelected = Model.Item.CategoryCodes.Contains(category.CategoryCode);
+                                        <input type="checkbox" class="btn-check" id="cat_@category.CategoryCode" value="@category.CategoryCode" @(isSelected ? "checked" : "") />
+                                        <label class="btn btn-outline-secondary" for="cat_@category.CategoryCode">
+                                            @category.CategoryCode
+                                        </label>
+                                    }
+                                </div>
+                            </div>
+                            <input type="hidden" id="selectedCategories" name="selectedCategories" value="@Model.SelectedCategories" />
+                            <script>
+                                document.addEventListener('DOMContentLoaded', function () {
+                                    const updateHiddenField = () => {
+                                        const checked = document.querySelectorAll('input.btn-check:checked');
+                                        const codes = Array.from(checked).map(c => c.value).join(',');
+                                        document.getElementById('selectedCategories').value = codes;
+                                    };
+
+                                    document.querySelectorAll('input.btn-check').forEach(checkbox => {
+                                        checkbox.addEventListener('change', updateHiddenField);
+                                    });
+                                });
+                            </script>
+                        }
+                    </div>
+
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary">Update Item</button>
+                        <a href="@Url.Page("./Index")" class="btn btn-secondary">Cancel</a>
+                    </div>
+                </form>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

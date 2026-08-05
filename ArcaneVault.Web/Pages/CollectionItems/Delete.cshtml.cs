@@ -1,20 +1,22 @@
 // Name: [Your Name] | Admin No: [Your Admin No] | Tutorial Group: [Your Group]
 
 using ArcaneVault.Web.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
-namespace ArcaneVault.Web.Pages.Categories
+namespace ArcaneVault.Web.Pages.CollectionItems
 {
+    [Authorize]
     public class DeleteModel : PageModel
     {
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly ILogger<DeleteModel> _logger;
 
-        public CategoryDto? Category { get; set; }
+        public CollectionItemDto? Item { get; set; }
 
         [BindProperty(SupportsGet = true)]
-        public string? CategoryCode { get; set; }
+        public int? ItemId { get; set; }
 
         public string? ErrorMessage { get; set; }
 
@@ -24,42 +26,43 @@ namespace ArcaneVault.Web.Pages.Categories
             _logger = logger;
         }
 
-        public async Task<IActionResult> OnGetAsync(string? categoryCode)
+        public async Task<IActionResult> OnGetAsync()
         {
-            if (string.IsNullOrWhiteSpace(categoryCode))
+            if (!ItemId.HasValue || ItemId <= 0)
             {
                 return RedirectToPage("./Index");
             }
 
-            CategoryCode = categoryCode;
-
             try
             {
                 var httpClient = _httpClientFactory.CreateClient("ApiClient");
-                var response = await httpClient.GetAsync($"/api/categories/{categoryCode}");
+                var response = await httpClient.GetAsync($"/api/collectionitems/{ItemId}");
 
                 if (response.IsSuccessStatusCode)
                 {
                     var jsonContent = await response.Content.ReadAsStringAsync();
-                    Category = System.Text.Json.JsonSerializer.Deserialize<CategoryDto>(jsonContent,
+                    Item = System.Text.Json.JsonSerializer.Deserialize<CollectionItemDto>(jsonContent,
                         new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-                    _logger.LogInformation($"Retrieved category for deletion: {categoryCode}");
+                    // Verify ownership
+                    var userName = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? string.Empty;
+                    if (Item?.UserName != userName)
+                    {
+                        ErrorMessage = "You don't have permission to delete this item.";
+                        return RedirectToPage("./Index");
+                    }
+
+                    _logger.LogInformation($"Retrieved item for deletion: {ItemId}");
                 }
                 else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
                 {
                     return RedirectToPage("./Index");
                 }
-                else
-                {
-                    ErrorMessage = $"Failed to retrieve category. Status: {response.StatusCode}";
-                    _logger.LogError(ErrorMessage);
-                }
             }
             catch (Exception ex)
             {
-                ErrorMessage = "An error occurred while loading the category.";
-                _logger.LogError($"Error loading category {categoryCode}: {ex.Message}");
+                ErrorMessage = "An error occurred while loading the item.";
+                _logger.LogError($"Error loading collection item {ItemId}: {ex.Message}");
             }
 
             return Page();
@@ -67,7 +70,7 @@ namespace ArcaneVault.Web.Pages.Categories
 
         public async Task<IActionResult> OnPostAsync()
         {
-            if (string.IsNullOrWhiteSpace(CategoryCode))
+            if (!ItemId.HasValue || ItemId <= 0)
             {
                 return RedirectToPage("./Index");
             }
@@ -75,24 +78,24 @@ namespace ArcaneVault.Web.Pages.Categories
             try
             {
                 var httpClient = _httpClientFactory.CreateClient("ApiClient");
-                var response = await httpClient.DeleteAsync($"/api/categories/{CategoryCode}");
+                var response = await httpClient.DeleteAsync($"/api/collectionitems/{ItemId}");
 
                 if (response.IsSuccessStatusCode)
                 {
-                    _logger.LogInformation($"Category deleted successfully: {CategoryCode}");
+                    _logger.LogInformation($"Collection item deleted: {ItemId}");
                     return RedirectToPage("./Index");
                 }
                 else
                 {
                     var content = await response.Content.ReadAsStringAsync();
-                    ErrorMessage = $"Failed to delete category: {content}";
+                    ErrorMessage = $"Failed to delete item: {content}";
                     _logger.LogError(ErrorMessage);
                 }
             }
             catch (Exception ex)
             {
-                ErrorMessage = "An error occurred while deleting the category.";
-                _logger.LogError($"Error deleting category: {ex.Message}");
+                ErrorMessage = "An error occurred while deleting the item.";
+                _logger.LogError($"Error deleting collection item: {ex.Message}");
             }
 
             return Page();

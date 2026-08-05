@@ -1,0 +1,84 @@
+@* Name: [Your Name] | Admin No: [Your Admin No] | Tutorial Group: [Your Group] *@
+
+@page "{itemId}"
+@model ArcaneVault.Web.Pages.CollectionItems.DetailsModel
+
+@{
+    ViewData["Title"] = "Collection Item Details";
+}
+
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-8">
+            <h1>Collection Item Details</h1>
+            <hr />
+
+            @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+            {
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    @Model.ErrorMessage
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            }
+
+            @if (Model.Item != null)
+            {
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">@Model.Item.ItemName</h5>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Item ID:</label>
+                            <p>@Model.Item.ItemId</p>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Starting Quantity:</label>
+                                    <p>@Model.Item.StartingQuantity</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Current Quantity:</label>
+                                    <p><span class="badge bg-info">@Model.Item.CurrentQuantity</span></p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Owner:</label>
+                            <p>@Model.Item.UserName</p>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Categories:</label>
+                            <p>
+                                @if (Model.Item.CategoryCodes.Count > 0)
+                                {
+                                    @foreach (var code in Model.Item.CategoryCodes)
+                                    {
+                                        <span class="badge bg-secondary">@code</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-muted">No categories assigned</span>
+                                }
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <a href="@Url.Page("./Edit", new { itemId = Model.Item.ItemId })" class="btn btn-warning">
+                        Edit
+                    </a>
+                    <a href="@Url.Page("./Delete", new { itemId = Model.Item.ItemId })" class="btn btn-danger">
+                        Delete
+                    </a>
+                    <a href="@Url.Page("./Index")" class="btn btn-secondary">
+                        Back to List
+                    </a>
+                </div>
+            }
+        </div>
+    </div>
+</div>

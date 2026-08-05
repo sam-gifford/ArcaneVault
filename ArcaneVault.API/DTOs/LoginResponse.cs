@@ -1,3 +1,5 @@
+// Name: [Your Name] | Admin No: [Your Admin No] | Tutorial Group: [Your Group]
+
 namespace ArcaneVault.API.DTOs
 {
     public class LoginResponse

@@ -1,0 +1,87 @@
+@* Name: [Your Name] | Admin No: [Your Admin No] | Tutorial Group: [Your Group] *@
+
+@page "{itemId}"
+@model ArcaneVault.Web.Pages.CollectionItems.DeleteModel
+
+@{
+    ViewData["Title"] = "Delete Collection Item";
+}
+
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-8">
+            <h1>Delete Collection Item</h1>
+            <hr />
+
+            @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+            {
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    @Model.ErrorMessage
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            }
+
+            @if (Model.Item != null)
+            {
+                <div class="alert alert-warning" role="alert">
+                    <strong>Warning!</strong> This action cannot be undone.
+                </div>
+
+                <div class="card border-danger">
+                    <div class="card-body">
+                        <h5 class="card-title">@Model.Item.ItemName</h5>
+                        <p class="card-text">
+                            Are you sure you want to delete this collection item?
+                        </p>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Item Name:</label>
+                            <p>@Model.Item.ItemName</p>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Starting Quantity:</label>
+                                    <p>@Model.Item.StartingQuantity</p>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Current Quantity:</label>
+                                    <p><span class="badge bg-info">@Model.Item.CurrentQuantity</span></p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Categories:</label>
+                            <p>
+                                @if (Model.Item.CategoryCodes.Count > 0)
+                                {
+                                    @foreach (var code in Model.Item.CategoryCodes)
+                                    {
+                                        <span class="badge bg-secondary">@code</span>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-muted">None</span>
+                                }
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <form method="post" style="display:inline;">
+                        <input type="hidden" asp-for="ItemId" />
+                        <button type="submit" class="btn btn-danger">
+                            Yes, Delete Item
+                        </button>
+                    </form>
+                    <a href="@Url.Page("./Index")" class="btn btn-secondary">
+                        Cancel
+                    </a>
+                </div>
+            }
+        </div>
+    </div>
+</div>

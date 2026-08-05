@@ -1,8 +1,12 @@
+// Name: [Your Name] | Admin No: [Your Admin No] | Tutorial Group: [Your Group]
+
 using ArcaneVault.API.Data;
 using ArcaneVault.API.DTOs;
 using ArcaneVault.API.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace ArcaneVault.API.Controllers
 {
@@ -17,6 +21,27 @@ namespace ArcaneVault.API.Controllers
         {
             _context = context;
             _logger = logger;
+        }
+
+        /// <summary>
+        /// Hash password using SHA256
+        /// </summary>
+        private string HashPassword(string password)
+        {
+            using (var sha256 = SHA256.Create())
+            {
+                var hashedBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
+                return Convert.ToBase64String(hashedBytes);
+            }
+        }
+
+        /// <summary>
+        /// Verify password against stored hash
+        /// </summary>
+        private bool VerifyPassword(string password, string hash)
+        {
+            var hashOfInput = HashPassword(password);
+            return hashOfInput == hash;
         }
 
         /// <summary>
@@ -71,6 +96,7 @@ namespace ArcaneVault.API.Controllers
                 {
                     UserName = request.UserName,
                     Email = request.Email,
+                    PasswordHash = HashPassword(request.Password),
                     RoleId = 1, // User role
                     IsDeleted = false
                 };
@@ -125,9 +151,9 @@ namespace ArcaneVault.API.Controllers
                     .Include(u => u.Role)
                     .FirstOrDefaultAsync(u => u.UserName == request.UserName && !u.IsDeleted);
 
-                if (user == null)
+                if (user == null || !VerifyPassword(request.Password, user.PasswordHash))
                 {
-                    _logger.LogWarning($"Login attempt with non-existent username: {request.UserName}");
+                    _logger.LogWarning($"Login attempt with invalid credentials: {request.UserName}");
                     return Unauthorized(new LoginResponse
                     {
                         Success = false,

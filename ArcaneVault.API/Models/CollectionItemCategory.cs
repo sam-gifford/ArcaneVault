@@ -1,3 +1,5 @@
+// Name: [Your Name] | Admin No: [Your Admin No] | Tutorial Group: [Your Group]
+
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace ArcaneVault.API.Models

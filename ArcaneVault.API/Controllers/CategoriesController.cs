@@ -1,3 +1,5 @@
+// Name: [Your Name] | Admin No: [Your Admin No] | Tutorial Group: [Your Group]
+
 using ArcaneVault.API.Data;
 using ArcaneVault.API.DTOs;
 using ArcaneVault.API.Models;

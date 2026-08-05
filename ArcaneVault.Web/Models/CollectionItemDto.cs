@@ -1,8 +1,8 @@
 // Name: [Your Name] | Admin No: [Your Admin No] | Tutorial Group: [Your Group]
 
-namespace ArcaneVault.API.DTOs
+namespace ArcaneVault.Web.Models
 {
-    public class CollectionItemResponse
+    public class CollectionItemDto
     {
         public int ItemId { get; set; }
         public string ItemName { get; set; } = null!;

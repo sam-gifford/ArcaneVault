@@ -1,3 +1,5 @@
+// Name: [Your Name] | Admin No: [Your Admin No] | Tutorial Group: [Your Group]
+
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -12,6 +14,9 @@ namespace ArcaneVault.API.Models
 
         [Required]
         public string Email { get; set; } = null!;
+
+        [Required]
+        public string PasswordHash { get; set; } = null!;
 
         public bool IsDeleted { get; set; }
 
