@@ -1,10 +1,14 @@
-// Name: [Your Name] | Admin No: [Your Admin No] | Tutorial Group: [Your Group]
+// Name: Gifford | Admin No: 252266P | Tutorial Group: IT2814-06
 
 using ArcaneVault.API.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace ArcaneVault.API.Data
 {
+    /// <summary>
+    /// ArcaneVaultDbContext - Entity Framework Core DbContext for ArcaneVault application.
+    /// Handles database mapping, relationships, soft deletes via global query filters, and data seeding.
+    /// </summary>
     public class ArcaneVaultDbContext : DbContext
     {
         public ArcaneVaultDbContext(DbContextOptions<ArcaneVaultDbContext> options) 
@@ -18,6 +22,15 @@ namespace ArcaneVault.API.Data
         public DbSet<CollectionItem> CollectionItems { get; set; } = null!;
         public DbSet<CollectionItemCategory> CollectionItemCategories { get; set; } = null!;
 
+        /// <summary>
+        /// OnModelCreating - Configures entity mappings, relationships, query filters, and seed data.
+        /// 
+        /// Key configurations:
+        /// - Composite primary key for CollectionItemCategory (ItemId + CategoryCode)
+        /// - Global query filters to exclude soft-deleted records (IsDeleted == true)
+        /// - One-to-many relationships with cascade/restrict delete behavior
+        /// - Seed data: Staff (RoleId=1) and User (RoleId=2) roles
+        /// </summary>
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -39,6 +52,14 @@ namespace ArcaneVault.API.Data
             modelBuilder.Entity<CollectionItem>()
                 .HasKey(i => i.ItemId);
 
+            // Global query filter for ArcaneVaultUser - exclude soft-deleted records
+            modelBuilder.Entity<ArcaneVaultUser>()
+                .HasQueryFilter(u => !u.IsDeleted);
+
+            // Global query filter for CollectionItem - exclude soft-deleted records
+            modelBuilder.Entity<CollectionItem>()
+                .HasQueryFilter(i => !i.IsDeleted);
+
             // Configure User -> Role relationship (many-to-one)
             modelBuilder.Entity<ArcaneVaultUser>()
                 .HasOne(u => u.Role)
@@ -53,7 +74,7 @@ namespace ArcaneVault.API.Data
                 .HasForeignKey(i => i.UserName)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Configure composite primary key for CollectionItemCategory
+            // Configure composite primary key for CollectionItemCategory (ItemId, CategoryCode)
             modelBuilder.Entity<CollectionItemCategory>()
                 .HasKey(cic => new { cic.ItemId, cic.CategoryCode });
 
@@ -71,10 +92,12 @@ namespace ArcaneVault.API.Data
                 .HasForeignKey(cic => cic.CategoryCode)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Seed default roles
+            // Seed default master roles
+            // Role 1: Staff - can manage categories and collections
+            // Role 2: User - can only manage their own collections
             modelBuilder.Entity<ArcaneVaultUserRole>().HasData(
-                new ArcaneVaultUserRole { RoleId = 1, RoleName = "User" },
-                new ArcaneVaultUserRole { RoleId = 2, RoleName = "Staff" }
+                new ArcaneVaultUserRole { RoleId = 1, RoleName = "Staff" },
+                new ArcaneVaultUserRole { RoleId = 2, RoleName = "User" }
             );
         }
     }

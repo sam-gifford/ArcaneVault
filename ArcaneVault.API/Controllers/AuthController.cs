@@ -1,4 +1,4 @@
-// Name: [Your Name] | Admin No: [Your Admin No] | Tutorial Group: [Your Group]
+// Name: Gifford | Admin No: 252266P | Tutorial Group: IT2814-06
 
 using ArcaneVault.API.Data;
 using ArcaneVault.API.DTOs;
@@ -45,7 +45,8 @@ namespace ArcaneVault.API.Controllers
         }
 
         /// <summary>
-        /// Register a new user with the User role
+        /// Register a new user with the User role.
+        /// Includes asynchronous validation to check for duplicate emails before creating account.
         /// </summary>
         [HttpPost("register")]
         public async Task<ActionResult<RegisterResponse>> Register([FromBody] RegisterRequest request)
@@ -76,7 +77,7 @@ namespace ArcaneVault.API.Controllers
                 });
             }
 
-            // Check if email already exists
+            // Asynchronously check if email already exists (async validation)
             var emailExists = await _context.ArcaneVaultUsers
                 .FirstOrDefaultAsync(u => u.Email == request.Email);
             if (emailExists != null)
@@ -91,13 +92,13 @@ namespace ArcaneVault.API.Controllers
 
             try
             {
-                // Create new user with User role (RoleId = 1)
+                // Create new user with User role (RoleId = 2)
                 var newUser = new ArcaneVaultUser
                 {
                     UserName = request.UserName,
                     Email = request.Email,
                     PasswordHash = HashPassword(request.Password),
-                    RoleId = 1, // User role
+                    RoleId = 2, // User role
                     IsDeleted = false
                 };
 
@@ -126,7 +127,7 @@ namespace ArcaneVault.API.Controllers
         }
 
         /// <summary>
-        /// Login a user
+        /// Login a user. Validates username and password, returns user info with role.
         /// </summary>
         [HttpPost("login")]
         public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
@@ -146,10 +147,10 @@ namespace ArcaneVault.API.Controllers
 
             try
             {
-                // Find user by username
+                // Find user by username (soft-deleted users excluded via global query filter)
                 var user = await _context.ArcaneVaultUsers
                     .Include(u => u.Role)
-                    .FirstOrDefaultAsync(u => u.UserName == request.UserName && !u.IsDeleted);
+                    .FirstOrDefaultAsync(u => u.UserName == request.UserName);
 
                 if (user == null || !VerifyPassword(request.Password, user.PasswordHash))
                 {

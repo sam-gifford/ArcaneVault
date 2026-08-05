@@ -1,4 +1,4 @@
-// Name: [Your Name] | Admin No: [Your Admin No] | Tutorial Group: [Your Group]
+// Name: Gifford | Admin No: 252266P | Tutorial Group: IT2814-06
 
 using ArcaneVault.Web.Models;
 using Microsoft.AspNetCore.Authentication;

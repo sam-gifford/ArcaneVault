@@ -1,4 +1,4 @@
-// Name: [Your Name] | Admin No: [Your Admin No] | Tutorial Group: [Your Group]
+// Name: Gifford | Admin No: 252266P | Tutorial Group: IT2814-06
 
 using ArcaneVault.API.Data;
 using ArcaneVault.API.DTOs;
@@ -8,6 +8,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ArcaneVault.API.Controllers
 {
+    /// <summary>
+    /// CollectionItemsController - Manages collection item CRUD operations and search functionality.
+    /// Uses LINQ queries to filter items with soft-delete support via global query filters.
+    /// </summary>
     [ApiController]
     [Route("api/[controller]")]
     public class CollectionItemsController : ControllerBase
@@ -19,6 +23,54 @@ namespace ArcaneVault.API.Controllers
         {
             _context = context;
             _logger = logger;
+        }
+
+        /// <summary>
+        /// Search collection items across all fields (ItemName, UserName, ItemId) using LINQ.
+        /// Filters non-deleted items only via global query filter.
+        /// GET /api/collectionitems/search?query={searchTerm}
+        /// </summary>
+        [HttpGet("search")]
+        public async Task<ActionResult<IEnumerable<CollectionItemResponse>>> Search(string? query = null)
+        {
+            try
+            {
+                var searchQuery = _context.CollectionItems
+                    .Include(i => i.CollectionItemCategories)
+                    .AsQueryable();
+
+                // If search term provided, filter across ItemName, UserName, and ItemId
+                if (!string.IsNullOrWhiteSpace(query))
+                {
+                    var lowerQuery = query.ToLower();
+                    searchQuery = searchQuery.Where(i =>
+                        i.ItemName.ToLower().Contains(lowerQuery) ||
+                        i.UserName.ToLower().Contains(lowerQuery) ||
+                        i.ItemId.ToString().Contains(query)
+                    );
+                }
+
+                var items = await searchQuery
+                    .Select(i => new CollectionItemResponse
+                    {
+                        ItemId = i.ItemId,
+                        ItemName = i.ItemName,
+                        StartingQuantity = i.StartingQuantity,
+                        CurrentQuantity = i.CurrentQuantity,
+                        UserName = i.UserName,
+                        CategoryCodes = i.CollectionItemCategories.Select(c => c.CategoryCode).ToList()
+                    })
+                    .ToListAsync();
+
+                _logger.LogInformation($"Search executed with query='{query}'. Found {items.Count} results");
+                return Ok(items);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error searching collection items: {ex.Message}");
+                return StatusCode(StatusCodes.Status500InternalServerError,
+                    new { message = "An error occurred while searching collection items" });
+            }
         }
 
         /// <summary>
@@ -35,7 +87,7 @@ namespace ArcaneVault.API.Controllers
                 }
 
                 var items = await _context.CollectionItems
-                    .Where(i => i.UserName == userName && !i.IsDeleted)
+                    .Where(i => i.UserName == userName)
                     .Include(i => i.CollectionItemCategories)
                     .Select(i => new CollectionItemResponse
                     {

@@ -1,4 +1,4 @@
-@* Name: [Your Name] | Admin No: [Your Admin No] | Tutorial Group: [Your Group] *@
+@* Name: Gifford | Admin No: 252266P | Tutorial Group: IT2814-06 *@
 
 @page
 @model ArcaneVault.Web.Pages.CollectionItems.IndexModel
@@ -20,6 +20,26 @@
         </div>
     </div>
 
+    <!-- Search Form -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-8">
+                    <input type="text" name="searchQuery" class="form-control" placeholder="Search by item name, ID..." value="@Model.SearchQuery" />
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-outline-primary w-100">Search</button>
+                </div>
+                @if (!string.IsNullOrEmpty(Model.SearchQuery))
+                {
+                    <div class="col-md-2">
+                        <a href="@Url.Page("./Index")" class="btn btn-outline-secondary w-100">Clear</a>
+                    </div>
+                }
+            </form>
+        </div>
+    </div>
+
     @if (!string.IsNullOrEmpty(Model.ErrorMessage))
     {
         <div class="alert alert-danger alert-dismissible fade show" role="alert">
@@ -31,7 +51,14 @@
     @if (Model.CollectionItems.Count == 0)
     {
         <div class="alert alert-info">
-            No items in your collection yet. <a href="@Url.Page("./Create")">Add one now</a>.
+            @if (!string.IsNullOrEmpty(Model.SearchQuery))
+            {
+                <span>No items found matching "@Model.SearchQuery". <a href="@Url.Page("./Index")">Clear search</a></span>
+            }
+            else
+            {
+                <span>No items in your collection yet. <a href="@Url.Page("./Create")">Add one now</a>.</span>
+            }
         </div>
     }
     else
