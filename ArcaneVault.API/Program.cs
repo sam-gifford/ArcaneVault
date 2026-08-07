@@ -1,32 +1,73 @@
 // Name: Gifford | Admin No: 252266P | Tutorial Group: IT2814-06
 
-// Name: [Your Name] | Admin No: [Your Admin No] | Tutorial Group: [Your Group]
-
 using ArcaneVault.API.Data;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace ArcaneVault.API
 {
     public class Program
     {
-        public static void Main(string[] args)
+        public static async Task Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            // Add services to the container.
-            var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
+            var configuredConnection = builder.Configuration.GetConnectionString("DefaultConnection")
                 ?? "Data Source=ArcaneVault.db";
+            var connectionString = configuredConnection.Contains("Data Source=ArcaneVault.db", StringComparison.OrdinalIgnoreCase)
+                ? $"Data Source={Path.Combine(builder.Environment.ContentRootPath, "ArcaneVault.db")}"
+                : configuredConnection;
 
             builder.Services.AddDbContext<ArcaneVaultDbContext>(options =>
                 options.UseSqlite(connectionString));
 
+            var jwtKey = builder.Configuration["Jwt:Key"];
+            if (string.IsNullOrWhiteSpace(jwtKey))
+            {
+                jwtKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+                builder.Configuration["Jwt:Key"] = jwtKey;
+            }
+
+            if (Encoding.UTF8.GetByteCount(jwtKey) < 32)
+            {
+                throw new InvalidOperationException("Jwt:Key must contain at least 32 bytes.");
+            }
+            builder.Services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = builder.Configuration["Jwt:Issuer"],
+                    ValidAudience = builder.Configuration["Jwt:Audience"],
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+                    ClockSkew = TimeSpan.Zero
+                };
+            });
+            builder.Services.AddAuthorization();
             builder.Services.AddControllers();
-            // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
             builder.Services.AddOpenApi();
 
             var app = builder.Build();
 
-            // Configure the HTTP request pipeline.
+            using (var scope = app.Services.CreateScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<ArcaneVaultDbContext>();
+                var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+                await context.Database.EnsureCreatedAsync();
+                await DatabaseSeeder.SeedAsync(context, app.Configuration, logger);
+            }
+
             if (app.Environment.IsDevelopment())
             {
                 app.MapOpenApi();
@@ -34,12 +75,12 @@ namespace ArcaneVault.API
 
             app.UseHttpsRedirection();
 
+            app.UseAuthentication();
             app.UseAuthorization();
-
 
             app.MapControllers();
 
-            app.Run();
+            await app.RunAsync();
         }
     }
 }

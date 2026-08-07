@@ -1,7 +1,5 @@
 // Name: Gifford | Admin No: 252266P | Tutorial Group: IT2814-06
 
-// Name: [Your Name] | Admin No: [Your Admin No] | Tutorial Group: [Your Group]
-
 using System.ComponentModel.DataAnnotations;
 
 namespace ArcaneVault.API.DTOs
@@ -10,6 +8,7 @@ namespace ArcaneVault.API.DTOs
     {
         [Required(ErrorMessage = "Username is required")]
         [StringLength(100, MinimumLength = 3, ErrorMessage = "Username must be between 3 and 100 characters")]
+        [RegularExpression(@"^[A-Za-z0-9._-]+$", ErrorMessage = "Username may contain only letters, numbers, dots, underscores, and hyphens")]
         public string UserName { get; set; } = null!;
 
         [Required(ErrorMessage = "Email is required")]

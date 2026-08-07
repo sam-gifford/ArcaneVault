@@ -14,6 +14,11 @@
                 <div class="card-body">
                     <h2 class="card-title text-center mb-4">ArcaneVault Login</h2>
 
+                    @if (TempData["SuccessMessage"] is string successMessage)
+                    {
+                        <div class="alert alert-success" role="alert">@successMessage</div>
+                    }
+
                     @if (!string.IsNullOrEmpty(Model.ErrorMessage))
                     {
                         <div class="alert alert-danger alert-dismissible fade show" role="alert">
@@ -24,15 +29,15 @@
 
                     <form method="post">
                         <div class="mb-3">
-                            <label for="userName" class="form-label">Username</label>
-                            <input type="text" 
-                                   class="form-control" 
-                                   id="userName" 
-                                   name="userName" 
-                                   asp-for="UserName"
-                                   placeholder="Enter your username" 
-                                   autofocus 
-                                   required />
+                            <label asp-for="UserName" class="form-label">Username</label>
+                            <input asp-for="UserName" class="form-control" placeholder="Enter your username" autofocus />
+                            <span asp-validation-for="UserName" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Password" class="form-label">Password</label>
+                            <input asp-for="Password" class="form-control" placeholder="Enter your password" />
+                            <span asp-validation-for="Password" class="text-danger"></span>
                         </div>
 
                         <button type="submit" class="btn btn-primary w-100">Login</button>
@@ -48,3 +53,7 @@
         </div>
     </div>
 </div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

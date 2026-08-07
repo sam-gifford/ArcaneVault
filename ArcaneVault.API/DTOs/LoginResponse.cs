@@ -1,7 +1,5 @@
 // Name: Gifford | Admin No: 252266P | Tutorial Group: IT2814-06
 
-// Name: [Your Name] | Admin No: [Your Admin No] | Tutorial Group: [Your Group]
-
 namespace ArcaneVault.API.DTOs
 {
     public class LoginResponse
@@ -11,5 +9,7 @@ namespace ArcaneVault.API.DTOs
         public string? UserName { get; set; }
         public string? Email { get; set; }
         public string? Role { get; set; }
+        public string? Token { get; set; }
+        public DateTime? TokenExpiration { get; set; }
     }
 }

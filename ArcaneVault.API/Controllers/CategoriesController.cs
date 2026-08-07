@@ -3,12 +3,14 @@
 using ArcaneVault.API.Data;
 using ArcaneVault.API.DTOs;
 using ArcaneVault.API.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace ArcaneVault.API.Controllers
 {
     [ApiController]
+    [Authorize]
     [Route("api/[controller]")]
     public class CategoriesController : ControllerBase
     {
@@ -90,6 +92,7 @@ namespace ArcaneVault.API.Controllers
         /// Create a new category
         /// </summary>
         [HttpPost]
+        [Authorize(Roles = "Staff")]
         public async Task<ActionResult<CategoryResponse>> Create([FromBody] CreateCategoryRequest request)
         {
             // Validate request
@@ -144,6 +147,7 @@ namespace ArcaneVault.API.Controllers
         /// Update an existing category
         /// </summary>
         [HttpPut("{categoryCode}")]
+        [Authorize(Roles = "Staff")]
         public async Task<ActionResult<CategoryResponse>> Update(string categoryCode, [FromBody] UpdateCategoryRequest request)
         {
             // Validate request
@@ -197,6 +201,7 @@ namespace ArcaneVault.API.Controllers
         /// Delete a category
         /// </summary>
         [HttpDelete("{categoryCode}")]
+        [Authorize(Roles = "Staff")]
         public async Task<IActionResult> Delete(string categoryCode)
         {
             try

@@ -1,10 +1,12 @@
 // Name: Gifford | Admin No: 252266P | Tutorial Group: IT2814-06
 
 using ArcaneVault.Web.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace ArcaneVault.Web.Pages.Categories
 {
+    [Authorize(Roles = "Staff")]
     public class IndexModel : PageModel
     {
         private readonly IHttpClientFactory _httpClientFactory;

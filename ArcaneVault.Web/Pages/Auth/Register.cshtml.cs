@@ -2,6 +2,8 @@
 
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using System.ComponentModel.DataAnnotations;
+using System.Net.Http.Json;
 
 namespace ArcaneVault.Web.Pages.Auth
 {
@@ -11,15 +13,34 @@ namespace ArcaneVault.Web.Pages.Auth
         private readonly ILogger<RegisterModel> _logger;
 
         [BindProperty]
+        [Required(ErrorMessage = "Username is required")]
+        [StringLength(100, MinimumLength = 3)]
+        [RegularExpression(@"^[A-Za-z0-9._-]+$", ErrorMessage = "Use only letters, numbers, dots, underscores, and hyphens")]
         public string UserName { get; set; } = string.Empty;
 
         [BindProperty]
+        [Required(ErrorMessage = "Email is required")]
+        [EmailAddress(ErrorMessage = "Enter a valid email address")]
         public string Email { get; set; } = string.Empty;
+
+        [BindProperty]
+        [Required(ErrorMessage = "Password is required")]
+        [StringLength(100, MinimumLength = 6)]
+        [DataType(DataType.Password)]
+        public string Password { get; set; } = string.Empty;
+
+        [BindProperty]
+        [Required(ErrorMessage = "Confirm Password is required")]
+        [Compare(nameof(Password), ErrorMessage = "Passwords do not match")]
+        [DataType(DataType.Password)]
+        public string ConfirmPassword { get; set; } = string.Empty;
 
         public string? SuccessMessage { get; set; }
         public string? ErrorMessage { get; set; }
 
-        public RegisterModel(IHttpClientFactory httpClientFactory, ILogger<RegisterModel> logger)
+        public RegisterModel(
+            IHttpClientFactory httpClientFactory,
+            ILogger<RegisterModel> logger)
         {
             _httpClientFactory = httpClientFactory;
             _logger = logger;
@@ -27,46 +48,45 @@ namespace ArcaneVault.Web.Pages.Auth
 
         public async Task<IActionResult> OnPostAsync()
         {
-            if (string.IsNullOrWhiteSpace(UserName) || string.IsNullOrWhiteSpace(Email))
+            if (!ModelState.IsValid)
             {
-                ErrorMessage = "Username and Email are required.";
                 return Page();
             }
 
             try
             {
                 var httpClient = _httpClientFactory.CreateClient("ApiClient");
-                var registerRequest = new { userName = UserName, email = Email };
-                var jsonContent = new System.Net.Http.StringContent(
-                    System.Text.Json.JsonSerializer.Serialize(registerRequest),
-                    System.Text.Encoding.UTF8,
-                    "application/json"
-                );
+                var response = await httpClient.PostAsJsonAsync(
+                    "/api/auth/register",
+                    new { userName = UserName, email = Email, password = Password });
 
-                var response = await httpClient.PostAsync("/api/auth/register", jsonContent);
-
-                if (response.IsSuccessStatusCode)
+                var apiResponse = await response.Content.ReadFromJsonAsync<RegisterApiResponse>();
+                if (!response.IsSuccessStatusCode)
                 {
-                    _logger.LogInformation($"User registered successfully: {UserName}");
-                    SuccessMessage = $"Registration successful! Welcome, {UserName}. You can now log in.";
-                    UserName = string.Empty;
-                    Email = string.Empty;
+                    ErrorMessage = apiResponse?.Message ?? "Registration failed.";
+                    _logger.LogWarning(
+                        "Registration failed for {UserName}: {Message}",
+                        UserName,
+                        ErrorMessage);
                     return Page();
                 }
-                else
-                {
-                    var content = await response.Content.ReadAsStringAsync();
-                    ErrorMessage = $"Registration failed: {content}";
-                    _logger.LogWarning($"Registration failed for user: {UserName} - {content}");
-                }
-            }
-            catch (Exception ex)
-            {
-                ErrorMessage = "An error occurred during registration. Please try again.";
-                _logger.LogError($"Error during registration: {ex.Message}");
-            }
 
-            return Page();
+                TempData["SuccessMessage"] = "Registration successful. You can now log in.";
+                _logger.LogInformation("User {UserName} registered successfully", UserName);
+                return RedirectToPage("./Login");
+            }
+            catch (HttpRequestException ex)
+            {
+                ErrorMessage = "The ArcaneVault API is unavailable. Start both projects and try again.";
+                _logger.LogError(ex, "API connection failed during registration");
+                return Page();
+            }
+        }
+
+        private sealed class RegisterApiResponse
+        {
+            public bool Success { get; set; }
+            public string Message { get; set; } = string.Empty;
         }
     }
 }

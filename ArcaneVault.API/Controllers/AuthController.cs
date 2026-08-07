@@ -3,9 +3,12 @@
 using ArcaneVault.API.Data;
 using ArcaneVault.API.DTOs;
 using ArcaneVault.API.Models;
+using ArcaneVault.API.Security;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Cryptography;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Text;
 
 namespace ArcaneVault.API.Controllers
@@ -16,32 +19,16 @@ namespace ArcaneVault.API.Controllers
     {
         private readonly ArcaneVaultDbContext _context;
         private readonly ILogger<AuthController> _logger;
+        private readonly IConfiguration _configuration;
 
-        public AuthController(ArcaneVaultDbContext context, ILogger<AuthController> logger)
+        public AuthController(
+            ArcaneVaultDbContext context,
+            ILogger<AuthController> logger,
+            IConfiguration configuration)
         {
             _context = context;
             _logger = logger;
-        }
-
-        /// <summary>
-        /// Hash password using SHA256
-        /// </summary>
-        private string HashPassword(string password)
-        {
-            using (var sha256 = SHA256.Create())
-            {
-                var hashedBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
-                return Convert.ToBase64String(hashedBytes);
-            }
-        }
-
-        /// <summary>
-        /// Verify password against stored hash
-        /// </summary>
-        private bool VerifyPassword(string password, string hash)
-        {
-            var hashOfInput = HashPassword(password);
-            return hashOfInput == hash;
+            _configuration = configuration;
         }
 
         /// <summary>
@@ -65,8 +52,12 @@ namespace ArcaneVault.API.Controllers
             }
 
             // Check if username already exists
+            var normalizedUserName = request.UserName.Trim();
+            var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+
             var existingUser = await _context.ArcaneVaultUsers
-                .FirstOrDefaultAsync(u => u.UserName == request.UserName);
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => u.UserName.ToLower() == normalizedUserName.ToLower());
             if (existingUser != null)
             {
                 _logger.LogWarning($"Registration attempt with duplicate username: {request.UserName}");
@@ -79,8 +70,9 @@ namespace ArcaneVault.API.Controllers
 
             // Asynchronously check if email already exists (async validation)
             var emailExists = await _context.ArcaneVaultUsers
-                .FirstOrDefaultAsync(u => u.Email == request.Email);
-            if (emailExists != null)
+                .IgnoreQueryFilters()
+                .AnyAsync(u => u.Email.ToLower() == normalizedEmail);
+            if (emailExists)
             {
                 _logger.LogWarning($"Registration attempt with duplicate email: {request.Email}");
                 return BadRequest(new RegisterResponse
@@ -95,9 +87,9 @@ namespace ArcaneVault.API.Controllers
                 // Create new user with User role (RoleId = 2)
                 var newUser = new ArcaneVaultUser
                 {
-                    UserName = request.UserName,
-                    Email = request.Email,
-                    PasswordHash = HashPassword(request.Password),
+                    UserName = normalizedUserName,
+                    Email = normalizedEmail,
+                    PasswordHash = PasswordService.HashPassword(request.Password),
                     RoleId = 2, // User role
                     IsDeleted = false
                 };
@@ -148,11 +140,12 @@ namespace ArcaneVault.API.Controllers
             try
             {
                 // Find user by username (soft-deleted users excluded via global query filter)
+                var normalizedUserName = request.UserName.Trim().ToLowerInvariant();
                 var user = await _context.ArcaneVaultUsers
                     .Include(u => u.Role)
-                    .FirstOrDefaultAsync(u => u.UserName == request.UserName);
+                    .FirstOrDefaultAsync(u => u.UserName.ToLower() == normalizedUserName);
 
-                if (user == null || !VerifyPassword(request.Password, user.PasswordHash))
+                if (user == null || !PasswordService.VerifyPassword(request.Password, user.PasswordHash))
                 {
                     _logger.LogWarning($"Login attempt with invalid credentials: {request.UserName}");
                     return Unauthorized(new LoginResponse
@@ -162,7 +155,24 @@ namespace ArcaneVault.API.Controllers
                     });
                 }
 
-                _logger.LogInformation($"User logged in successfully: {request.UserName}");
+                var expiration = DateTime.UtcNow.AddHours(
+                    _configuration.GetValue<int?>("Jwt:ExpiryHours") ?? 3);
+                var claims = new List<Claim>
+                {
+                    new Claim(ClaimTypes.Name, user.UserName),
+                    new Claim(ClaimTypes.Email, user.Email),
+                    new Claim(ClaimTypes.Role, user.Role.RoleName)
+                };
+                var signingKey = new SymmetricSecurityKey(
+                    Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
+                var token = new JwtSecurityToken(
+                    issuer: _configuration["Jwt:Issuer"],
+                    audience: _configuration["Jwt:Audience"],
+                    claims: claims,
+                    expires: expiration,
+                    signingCredentials: new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256));
+
+                _logger.LogInformation($"User logged in successfully: {user.UserName}");
 
                 return Ok(new LoginResponse
                 {
@@ -170,7 +180,9 @@ namespace ArcaneVault.API.Controllers
                     Message = "Login successful",
                     UserName = user.UserName,
                     Email = user.Email,
-                    Role = user.Role?.RoleName
+                    Role = user.Role.RoleName,
+                    Token = new JwtSecurityTokenHandler().WriteToken(token),
+                    TokenExpiration = expiration
                 });
             }
             catch (Exception ex)

@@ -32,25 +32,27 @@
 
                     <form method="post">
                         <div class="mb-3">
-                            <label for="userName" class="form-label">Username</label>
-                            <input type="text" 
-                                   class="form-control" 
-                                   id="userName" 
-                                   name="userName" 
-                                   asp-for="UserName"
-                                   placeholder="Enter username" 
-                                   required />
+                            <label asp-for="UserName" class="form-label">Username</label>
+                            <input asp-for="UserName" class="form-control" placeholder="Enter username" />
+                            <span asp-validation-for="UserName" class="text-danger"></span>
                         </div>
 
                         <div class="mb-3">
-                            <label for="email" class="form-label">Email</label>
-                            <input type="email" 
-                                   class="form-control" 
-                                   id="email" 
-                                   name="email" 
-                                   asp-for="Email"
-                                   placeholder="Enter email address" 
-                                   required />
+                            <label asp-for="Email" class="form-label">Email</label>
+                            <input asp-for="Email" class="form-control" placeholder="Enter email address" />
+                            <span asp-validation-for="Email" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Password" class="form-label">Password</label>
+                            <input asp-for="Password" class="form-control" placeholder="At least 6 characters" />
+                            <span asp-validation-for="Password" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="ConfirmPassword" class="form-label">Confirm Password</label>
+                            <input asp-for="ConfirmPassword" class="form-control" placeholder="Re-enter your password" />
+                            <span asp-validation-for="ConfirmPassword" class="text-danger"></span>
                         </div>
 
                         <button type="submit" class="btn btn-primary w-100">Register</button>
@@ -66,3 +68,7 @@
         </div>
     </div>
 </div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

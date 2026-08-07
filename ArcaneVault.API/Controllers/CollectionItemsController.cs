@@ -3,430 +3,281 @@
 using ArcaneVault.API.Data;
 using ArcaneVault.API.DTOs;
 using ArcaneVault.API.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace ArcaneVault.API.Controllers
 {
-    /// <summary>
-    /// CollectionItemsController - Manages collection item CRUD operations and search functionality.
-    /// Uses LINQ queries to filter items with soft-delete support via global query filters.
-    /// </summary>
     [ApiController]
+    [Authorize]
     [Route("api/[controller]")]
     public class CollectionItemsController : ControllerBase
     {
         private readonly ArcaneVaultDbContext _context;
         private readonly ILogger<CollectionItemsController> _logger;
 
-        public CollectionItemsController(ArcaneVaultDbContext context, ILogger<CollectionItemsController> logger)
+        public CollectionItemsController(
+            ArcaneVaultDbContext context,
+            ILogger<CollectionItemsController> logger)
         {
             _context = context;
             _logger = logger;
         }
 
-        /// <summary>
-        /// Search collection items across all fields (ItemName, UserName, ItemId) using LINQ.
-        /// Filters non-deleted items only via global query filter.
-        /// GET /api/collectionitems/search?query={searchTerm}
-        /// </summary>
+        private string? CurrentUserName => User.FindFirstValue(ClaimTypes.Name);
+
+        private IQueryable<CollectionItem> CurrentUserItems()
+        {
+            var userName = CurrentUserName;
+            return _context.CollectionItems
+                .Where(item => item.UserName == userName);
+        }
+
         [HttpGet("search")]
         public async Task<ActionResult<IEnumerable<CollectionItemResponse>>> Search(string? query = null)
         {
-            try
+            var userName = CurrentUserName;
+            if (string.IsNullOrWhiteSpace(userName))
             {
-                var searchQuery = _context.CollectionItems
-                    .Include(i => i.CollectionItemCategories)
-                    .AsQueryable();
-
-                // If search term provided, filter across ItemName, UserName, and ItemId
-                if (!string.IsNullOrWhiteSpace(query))
-                {
-                    var lowerQuery = query.ToLower();
-                    searchQuery = searchQuery.Where(i =>
-                        i.ItemName.ToLower().Contains(lowerQuery) ||
-                        i.UserName.ToLower().Contains(lowerQuery) ||
-                        i.ItemId.ToString().Contains(query)
-                    );
-                }
-
-                var items = await searchQuery
-                    .Select(i => new CollectionItemResponse
-                    {
-                        ItemId = i.ItemId,
-                        ItemName = i.ItemName,
-                        StartingQuantity = i.StartingQuantity,
-                        CurrentQuantity = i.CurrentQuantity,
-                        UserName = i.UserName,
-                        CategoryCodes = i.CollectionItemCategories.Select(c => c.CategoryCode).ToList()
-                    })
-                    .ToListAsync();
-
-                _logger.LogInformation($"Search executed with query='{query}'. Found {items.Count} results");
-                return Ok(items);
+                return Unauthorized();
             }
-            catch (Exception ex)
+
+            var itemsQuery = CurrentUserItems()
+                .Include(item => item.CollectionItemCategories)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(query))
             {
-                _logger.LogError($"Error searching collection items: {ex.Message}");
-                return StatusCode(StatusCodes.Status500InternalServerError,
-                    new { message = "An error occurred while searching collection items" });
+                var searchText = query.Trim().ToLower();
+                var isNumber = int.TryParse(searchText, out var number);
+
+                itemsQuery = itemsQuery.Where(item =>
+                    item.ItemName.ToLower().Contains(searchText) ||
+                    item.UserName.ToLower().Contains(searchText) ||
+                    item.CollectionItemCategories.Any(link =>
+                        link.CategoryCode.ToLower().Contains(searchText)) ||
+                    (isNumber && (
+                        item.ItemId == number ||
+                        item.StartingQuantity == number ||
+                        item.CurrentQuantity == number)));
             }
+
+            var items = await Project(itemsQuery)
+                .OrderBy(item => item.ItemName)
+                .ToListAsync();
+
+            _logger.LogInformation(
+                "Collection search for {UserName} with query {Query} returned {Count} items",
+                userName,
+                query,
+                items.Count);
+
+            return Ok(items);
         }
 
-        /// <summary>
-        /// Get all collection items for a specific user
-        /// </summary>
         [HttpGet("user/{userName}")]
         public async Task<ActionResult<IEnumerable<CollectionItemResponse>>> GetByUser(string userName)
         {
-            try
+            if (!string.Equals(userName, CurrentUserName, StringComparison.OrdinalIgnoreCase))
             {
-                if (string.IsNullOrWhiteSpace(userName))
-                {
-                    return BadRequest(new { message = "UserName is required" });
-                }
-
-                var items = await _context.CollectionItems
-                    .Where(i => i.UserName == userName)
-                    .Include(i => i.CollectionItemCategories)
-                    .Select(i => new CollectionItemResponse
-                    {
-                        ItemId = i.ItemId,
-                        ItemName = i.ItemName,
-                        StartingQuantity = i.StartingQuantity,
-                        CurrentQuantity = i.CurrentQuantity,
-                        UserName = i.UserName,
-                        CategoryCodes = i.CollectionItemCategories.Select(c => c.CategoryCode).ToList()
-                    })
-                    .ToListAsync();
-
-                _logger.LogInformation($"Retrieved {items.Count} collection items for user: {userName}");
-                return Ok(items);
+                return Forbid();
             }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Error retrieving collection items for user {userName}: {ex.Message}");
-                return StatusCode(StatusCodes.Status500InternalServerError,
-                    new { message = "An error occurred while retrieving collection items" });
-            }
+
+            var items = await Project(
+                    CurrentUserItems().Include(item => item.CollectionItemCategories))
+                .OrderBy(item => item.ItemName)
+                .ToListAsync();
+
+            return Ok(items);
         }
 
-        /// <summary>
-        /// Get a specific collection item by ID
-        /// </summary>
-        [HttpGet("{itemId}")]
+        [HttpGet("{itemId:int}")]
         public async Task<ActionResult<CollectionItemResponse>> GetById(int itemId)
         {
-            try
-            {
-                var item = await _context.CollectionItems
-                    .Where(i => i.ItemId == itemId && !i.IsDeleted)
-                    .Include(i => i.CollectionItemCategories)
-                    .FirstOrDefaultAsync();
+            var item = await Project(
+                    CurrentUserItems()
+                        .Where(item => item.ItemId == itemId)
+                        .Include(item => item.CollectionItemCategories))
+                .FirstOrDefaultAsync();
 
-                if (item == null)
-                {
-                    _logger.LogWarning($"Collection item not found: {itemId}");
-                    return NotFound(new { message = $"Collection item with ID {itemId} not found" });
-                }
-
-                var response = new CollectionItemResponse
-                {
-                    ItemId = item.ItemId,
-                    ItemName = item.ItemName,
-                    StartingQuantity = item.StartingQuantity,
-                    CurrentQuantity = item.CurrentQuantity,
-                    UserName = item.UserName,
-                    CategoryCodes = item.CollectionItemCategories.Select(c => c.CategoryCode).ToList()
-                };
-
-                return Ok(response);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Error retrieving collection item {itemId}: {ex.Message}");
-                return StatusCode(StatusCodes.Status500InternalServerError,
-                    new { message = "An error occurred while retrieving the collection item" });
-            }
+            return item == null
+                ? NotFound(new { message = $"Collection item with ID {itemId} was not found." })
+                : Ok(item);
         }
 
-        /// <summary>
-        /// Search collection items by any field (ItemName, UserName, CategoryCode)
-        /// </summary>
-        [HttpGet("search/query")]
-        public async Task<ActionResult<IEnumerable<CollectionItemResponse>>> Search(string? searchTerm = null, string? userName = null, string? categoryCode = null)
-        {
-            try
-            {
-                var query = _context.CollectionItems
-                    .Where(i => !i.IsDeleted)
-                    .AsQueryable();
-
-                // Filter by userName if provided
-                if (!string.IsNullOrWhiteSpace(userName))
-                {
-                    query = query.Where(i => i.UserName == userName);
-                }
-
-                // Search by term in ItemName if provided
-                if (!string.IsNullOrWhiteSpace(searchTerm))
-                {
-                    var lowerSearchTerm = searchTerm.ToLower();
-                    query = query.Where(i => i.ItemName.ToLower().Contains(lowerSearchTerm));
-                }
-
-                // Filter by categoryCode if provided
-                if (!string.IsNullOrWhiteSpace(categoryCode))
-                {
-                    query = query.Where(i => i.CollectionItemCategories
-                        .Any(c => c.CategoryCode == categoryCode));
-                }
-
-                var items = await query
-                    .Include(i => i.CollectionItemCategories)
-                    .Select(i => new CollectionItemResponse
-                    {
-                        ItemId = i.ItemId,
-                        ItemName = i.ItemName,
-                        StartingQuantity = i.StartingQuantity,
-                        CurrentQuantity = i.CurrentQuantity,
-                        UserName = i.UserName,
-                        CategoryCodes = i.CollectionItemCategories.Select(c => c.CategoryCode).ToList()
-                    })
-                    .ToListAsync();
-
-                _logger.LogInformation($"Search executed with term='{searchTerm}', userName='{userName}', categoryCode='{categoryCode}'. Found {items.Count} results");
-                return Ok(items);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Error searching collection items: {ex.Message}");
-                return StatusCode(StatusCodes.Status500InternalServerError,
-                    new { message = "An error occurred while searching collection items" });
-            }
-        }
-
-        /// <summary>
-        /// Create a new collection item
-        /// </summary>
         [HttpPost]
-        public async Task<ActionResult<CollectionItemResponse>> Create([FromBody] CreateCollectionItemRequest request)
+        public async Task<ActionResult<CollectionItemResponse>> Create(
+            [FromBody] CreateCollectionItemRequest request)
         {
-            // Validate request
-            if (!ModelState.IsValid)
+            var userName = CurrentUserName;
+            if (string.IsNullOrWhiteSpace(userName))
             {
-                var errors = ModelState.Values.SelectMany(v => v.Errors)
-                    .Select(e => e.ErrorMessage)
-                    .ToList();
-                return BadRequest(new { message = string.Join("; ", errors) });
+                return Unauthorized();
             }
 
-            try
+            if (!string.Equals(request.UserName, userName, StringComparison.OrdinalIgnoreCase))
             {
-                // Verify user exists
-                var userExists = await _context.ArcaneVaultUsers
-                    .AnyAsync(u => u.UserName == request.UserName && !u.IsDeleted);
-
-                if (!userExists)
-                {
-                    _logger.LogWarning($"Cannot create item: User '{request.UserName}' not found");
-                    return BadRequest(new { message = $"User '{request.UserName}' not found" });
-                }
-
-                // Validate CurrentQuantity does not exceed StartingQuantity
-                if (request.CurrentQuantity > request.StartingQuantity)
-                {
-                    return BadRequest(new { message = "Current Quantity cannot exceed Starting Quantity" });
-                }
-
-                // Verify all provided categories exist
-                if (request.CategoryCodes.Any())
-                {
-                    var validCategories = await _context.Categories
-                        .Where(c => request.CategoryCodes.Contains(c.CategoryCode))
-                        .Select(c => c.CategoryCode)
-                        .ToListAsync();
-
-                    var invalidCategories = request.CategoryCodes.Except(validCategories).ToList();
-                    if (invalidCategories.Any())
-                    {
-                        _logger.LogWarning($"Invalid category codes: {string.Join(", ", invalidCategories)}");
-                        return BadRequest(new { message = $"Invalid category codes: {string.Join(", ", invalidCategories)}" });
-                    }
-                }
-
-                var item = new CollectionItem
-                {
-                    ItemName = request.ItemName,
-                    StartingQuantity = request.StartingQuantity,
-                    CurrentQuantity = request.CurrentQuantity,
-                    UserName = request.UserName,
-                    IsDeleted = false
-                };
-
-                _context.CollectionItems.Add(item);
-                await _context.SaveChangesAsync();
-
-                // Add categories
-                if (request.CategoryCodes.Any())
-                {
-                    foreach (var categoryCode in request.CategoryCodes)
-                    {
-                        var itemCategory = new CollectionItemCategory
-                        {
-                            ItemId = item.ItemId,
-                            CategoryCode = categoryCode
-                        };
-                        _context.CollectionItemCategories.Add(itemCategory);
-                    }
-                    await _context.SaveChangesAsync();
-                }
-
-                _logger.LogInformation($"Collection item created successfully: {item.ItemId}");
-
-                var response = new CollectionItemResponse
-                {
-                    ItemId = item.ItemId,
-                    ItemName = item.ItemName,
-                    StartingQuantity = item.StartingQuantity,
-                    CurrentQuantity = item.CurrentQuantity,
-                    UserName = item.UserName,
-                    CategoryCodes = request.CategoryCodes
-                };
-
-                return CreatedAtAction(nameof(GetById), new { itemId = item.ItemId }, response);
+                return Forbid();
             }
-            catch (Exception ex)
+
+            var validationError = await ValidateItemRequest(
+                request.StartingQuantity,
+                request.CurrentQuantity,
+                request.CategoryCodes);
+            if (validationError != null)
             {
-                _logger.LogError($"Error creating collection item: {ex.Message}");
-                return StatusCode(StatusCodes.Status500InternalServerError,
-                    new { message = "An error occurred while creating the collection item" });
+                return BadRequest(new { message = validationError });
             }
+
+            var categoryCodes = request.CategoryCodes
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var item = new CollectionItem
+            {
+                ItemName = request.ItemName.Trim(),
+                StartingQuantity = request.StartingQuantity,
+                CurrentQuantity = request.CurrentQuantity,
+                UserName = userName,
+                IsDeleted = false,
+                CollectionItemCategories = categoryCodes
+                    .Select(code => new CollectionItemCategory { CategoryCode = code })
+                    .ToList()
+            };
+
+            _context.CollectionItems.Add(item);
+            await _context.SaveChangesAsync();
+
+            var response = ToResponse(item);
+            return CreatedAtAction(nameof(GetById), new { itemId = item.ItemId }, response);
         }
 
-        /// <summary>
-        /// Update an existing collection item
-        /// </summary>
-        [HttpPut("{itemId}")]
-        public async Task<ActionResult<CollectionItemResponse>> Update(int itemId, [FromBody] UpdateCollectionItemRequest request)
+        [HttpPut("{itemId:int}")]
+        public async Task<ActionResult<CollectionItemResponse>> Update(
+            int itemId,
+            [FromBody] UpdateCollectionItemRequest request)
         {
-            // Validate request
-            if (!ModelState.IsValid)
+            var item = await CurrentUserItems()
+                .Include(existingItem => existingItem.CollectionItemCategories)
+                .FirstOrDefaultAsync(existingItem => existingItem.ItemId == itemId);
+
+            if (item == null)
             {
-                var errors = ModelState.Values.SelectMany(v => v.Errors)
-                    .Select(e => e.ErrorMessage)
-                    .ToList();
-                return BadRequest(new { message = string.Join("; ", errors) });
+                return NotFound(new { message = $"Collection item with ID {itemId} was not found." });
             }
 
-            try
+            var validationError = await ValidateItemRequest(
+                request.StartingQuantity,
+                request.CurrentQuantity,
+                request.CategoryCodes);
+            if (validationError != null)
             {
-                var item = await _context.CollectionItems
-                    .Include(i => i.CollectionItemCategories)
-                    .FirstOrDefaultAsync(i => i.ItemId == itemId && !i.IsDeleted);
+                return BadRequest(new { message = validationError });
+            }
 
-                if (item == null)
-                {
-                    _logger.LogWarning($"Collection item not found for update: {itemId}");
-                    return NotFound(new { message = $"Collection item with ID {itemId} not found" });
-                }
+            var categoryCodes = request.CategoryCodes
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
-                // Validate CurrentQuantity does not exceed StartingQuantity
-                if (request.CurrentQuantity > request.StartingQuantity)
-                {
-                    return BadRequest(new { message = "Current Quantity cannot exceed Starting Quantity" });
-                }
+            item.ItemName = request.ItemName.Trim();
+            item.StartingQuantity = request.StartingQuantity;
+            item.CurrentQuantity = request.CurrentQuantity;
 
-                // Verify all provided categories exist
-                if (request.CategoryCodes.Any())
-                {
-                    var validCategories = await _context.Categories
-                        .Where(c => request.CategoryCodes.Contains(c.CategoryCode))
-                        .Select(c => c.CategoryCode)
-                        .ToListAsync();
-
-                    var invalidCategories = request.CategoryCodes.Except(validCategories).ToList();
-                    if (invalidCategories.Any())
-                    {
-                        _logger.LogWarning($"Invalid category codes: {string.Join(", ", invalidCategories)}");
-                        return BadRequest(new { message = $"Invalid category codes: {string.Join(", ", invalidCategories)}" });
-                    }
-                }
-
-                // Update item properties
-                item.ItemName = request.ItemName;
-                item.StartingQuantity = request.StartingQuantity;
-                item.CurrentQuantity = request.CurrentQuantity;
-
-                // Update categories
-                _context.CollectionItemCategories.RemoveRange(item.CollectionItemCategories);
-                foreach (var categoryCode in request.CategoryCodes)
-                {
-                    var itemCategory = new CollectionItemCategory
-                    {
-                        ItemId = item.ItemId,
-                        CategoryCode = categoryCode
-                    };
-                    _context.CollectionItemCategories.Add(itemCategory);
-                }
-
-                _context.CollectionItems.Update(item);
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation($"Collection item updated successfully: {itemId}");
-
-                var response = new CollectionItemResponse
+            _context.CollectionItemCategories.RemoveRange(item.CollectionItemCategories);
+            item.CollectionItemCategories = categoryCodes
+                .Select(code => new CollectionItemCategory
                 {
                     ItemId = item.ItemId,
-                    ItemName = item.ItemName,
-                    StartingQuantity = item.StartingQuantity,
-                    CurrentQuantity = item.CurrentQuantity,
-                    UserName = item.UserName,
-                    CategoryCodes = request.CategoryCodes
-                };
+                    CategoryCode = code
+                })
+                .ToList();
 
-                return Ok(response);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Error updating collection item {itemId}: {ex.Message}");
-                return StatusCode(StatusCodes.Status500InternalServerError,
-                    new { message = "An error occurred while updating the collection item" });
-            }
+            await _context.SaveChangesAsync();
+            return Ok(ToResponse(item));
         }
 
-        /// <summary>
-        /// Delete a collection item (soft delete)
-        /// </summary>
-        [HttpDelete("{itemId}")]
+        [HttpDelete("{itemId:int}")]
         public async Task<IActionResult> Delete(int itemId)
         {
-            try
+            var item = await CurrentUserItems()
+                .FirstOrDefaultAsync(existingItem => existingItem.ItemId == itemId);
+
+            if (item == null)
             {
-                var item = await _context.CollectionItems
-                    .FirstOrDefaultAsync(i => i.ItemId == itemId && !i.IsDeleted);
-
-                if (item == null)
-                {
-                    _logger.LogWarning($"Collection item not found for deletion: {itemId}");
-                    return NotFound(new { message = $"Collection item with ID {itemId} not found" });
-                }
-
-                // Soft delete
-                item.IsDeleted = true;
-                _context.CollectionItems.Update(item);
-                await _context.SaveChangesAsync();
-
-                _logger.LogInformation($"Collection item deleted successfully: {itemId}");
-
-                return NoContent();
+                return NotFound(new { message = $"Collection item with ID {itemId} was not found." });
             }
-            catch (Exception ex)
+
+            item.IsDeleted = true;
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+
+        private async Task<string?> ValidateItemRequest(
+            int startingQuantity,
+            int currentQuantity,
+            IEnumerable<string>? requestedCategoryCodes)
+        {
+            if (currentQuantity > startingQuantity)
             {
-                _logger.LogError($"Error deleting collection item {itemId}: {ex.Message}");
-                return StatusCode(StatusCodes.Status500InternalServerError,
-                    new { message = "An error occurred while deleting the collection item" });
+                return "Current Quantity cannot exceed Starting Quantity.";
             }
+
+            var categoryCodes = (requestedCategoryCodes ?? Enumerable.Empty<string>())
+                .Where(code => !string.IsNullOrWhiteSpace(code))
+                .Select(code => code.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (categoryCodes.Count == 0)
+            {
+                return null;
+            }
+
+            var validCodes = await _context.Categories
+                .Where(category => categoryCodes.Contains(category.CategoryCode))
+                .Select(category => category.CategoryCode)
+                .ToListAsync();
+
+            var invalidCodes = categoryCodes
+                .Except(validCodes, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            return invalidCodes.Count == 0
+                ? null
+                : $"Invalid category codes: {string.Join(", ", invalidCodes)}";
+        }
+
+        private static IQueryable<CollectionItemResponse> Project(
+            IQueryable<CollectionItem> query)
+        {
+            return query.Select(item => new CollectionItemResponse
+            {
+                ItemId = item.ItemId,
+                ItemName = item.ItemName,
+                StartingQuantity = item.StartingQuantity,
+                CurrentQuantity = item.CurrentQuantity,
+                UserName = item.UserName,
+                CategoryCodes = item.CollectionItemCategories
+                    .Select(link => link.CategoryCode)
+                    .ToList()
+            });
+        }
+
+        private static CollectionItemResponse ToResponse(CollectionItem item)
+        {
+            return new CollectionItemResponse
+            {
+                ItemId = item.ItemId,
+                ItemName = item.ItemName,
+                StartingQuantity = item.StartingQuantity,
+                CurrentQuantity = item.CurrentQuantity,
+                UserName = item.UserName,
+                CategoryCodes = item.CollectionItemCategories
+                    .Select(link => link.CategoryCode)
+                    .ToList()
+            };
         }
     }
 }
