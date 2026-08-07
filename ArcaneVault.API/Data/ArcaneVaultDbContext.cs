@@ -11,7 +11,7 @@ namespace ArcaneVault.API.Data
     /// </summary>
     public class ArcaneVaultDbContext : DbContext
     {
-        public ArcaneVaultDbContext(DbContextOptions<ArcaneVaultDbContext> options) 
+        public ArcaneVaultDbContext(DbContextOptions<ArcaneVaultDbContext> options)
             : base(options)
         {
         }
@@ -24,7 +24,7 @@ namespace ArcaneVault.API.Data
 
         /// <summary>
         /// OnModelCreating - Configures entity mappings, relationships, query filters, and seed data.
-        /// 
+        ///
         /// Key configurations:
         /// - Composite primary key for CollectionItemCategory (ItemId + CategoryCode)
         /// - Global query filters to exclude soft-deleted records (IsDeleted == true)
@@ -38,6 +38,10 @@ namespace ArcaneVault.API.Data
             // Configure ArcaneVaultUser primary key
             modelBuilder.Entity<ArcaneVaultUser>()
                 .HasKey(u => u.UserName);
+
+            modelBuilder.Entity<ArcaneVaultUser>()
+                .HasIndex(u => u.Email)
+                .IsUnique();
 
             // Configure ArcaneVaultUserRole primary key
             modelBuilder.Entity<ArcaneVaultUserRole>()

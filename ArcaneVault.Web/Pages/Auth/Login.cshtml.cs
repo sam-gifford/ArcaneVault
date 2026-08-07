@@ -4,6 +4,8 @@ using ArcaneVault.Web.Models;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using System.ComponentModel.DataAnnotations;
+using System.Net.Http.Json;
 using System.Security.Claims;
 
 namespace ArcaneVault.Web.Pages.Auth
@@ -14,99 +16,95 @@ namespace ArcaneVault.Web.Pages.Auth
         private readonly ILogger<LoginModel> _logger;
 
         [BindProperty]
+        [Required(ErrorMessage = "Username is required")]
         public string UserName { get; set; } = string.Empty;
+
+        [BindProperty]
+        [Required(ErrorMessage = "Password is required")]
+        [DataType(DataType.Password)]
+        public string Password { get; set; } = string.Empty;
 
         public string? ErrorMessage { get; set; }
 
-        public LoginModel(IHttpClientFactory httpClientFactory, ILogger<LoginModel> logger)
+        public LoginModel(
+            IHttpClientFactory httpClientFactory,
+            ILogger<LoginModel> logger)
         {
             _httpClientFactory = httpClientFactory;
             _logger = logger;
         }
 
-        public void OnGet()
+        public IActionResult OnGet()
         {
-            // Check if already logged in
-            if (User.Identity?.IsAuthenticated == true)
-            {
-                RedirectToPage("/Index");
-            }
+            return User.Identity?.IsAuthenticated == true
+                ? RedirectToPage("/Index")
+                : Page();
         }
 
         public async Task<IActionResult> OnPostAsync()
         {
-            if (string.IsNullOrWhiteSpace(UserName))
+            if (!ModelState.IsValid)
             {
-                ErrorMessage = "Username is required.";
                 return Page();
             }
 
             try
             {
                 var httpClient = _httpClientFactory.CreateClient("ApiClient");
-                var loginRequest = new { userName = UserName };
-                var jsonContent = new System.Net.Http.StringContent(
-                    System.Text.Json.JsonSerializer.Serialize(loginRequest),
-                    System.Text.Encoding.UTF8,
-                    "application/json"
-                );
+                var response = await httpClient.PostAsJsonAsync(
+                    "/api/auth/login",
+                    new { userName = UserName, password = Password });
 
-                var response = await httpClient.PostAsync("/api/auth/login", jsonContent);
-
-                if (response.IsSuccessStatusCode)
+                if (!response.IsSuccessStatusCode)
                 {
-                    var jsonResponse = await response.Content.ReadAsStringAsync();
-                    var loginResponse = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(jsonResponse,
-                        new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    ErrorMessage = "Invalid username or password.";
+                    _logger.LogWarning("Login failed for {UserName}", UserName);
+                    return Page();
+                }
 
-                    if (loginResponse != null && loginResponse.ContainsKey("userName"))
+                var loginResponse = await response.Content.ReadFromJsonAsync<LoginDto>();
+                if (loginResponse == null ||
+                    !loginResponse.Success ||
+                    string.IsNullOrWhiteSpace(loginResponse.Token))
+                {
+                    ErrorMessage = "The API returned an invalid login response.";
+                    return Page();
+                }
+
+                HttpContext.Session.SetString("UserName", loginResponse.UserName);
+                HttpContext.Session.SetString("Email", loginResponse.Email);
+                HttpContext.Session.SetString("Role", loginResponse.Role);
+                HttpContext.Session.SetString("JwtToken", loginResponse.Token);
+
+                var claims = new List<Claim>
+                {
+                    new Claim(ClaimTypes.Name, loginResponse.UserName),
+                    new Claim(ClaimTypes.Email, loginResponse.Email),
+                    new Claim(ClaimTypes.Role, loginResponse.Role)
+                };
+
+                await HttpContext.SignInAsync(
+                    "CookieAuth",
+                    new ClaimsPrincipal(new ClaimsIdentity(claims, "CookieAuth")),
+                    new AuthenticationProperties
                     {
-                        var userName = loginResponse["userName"]?.ToString() ?? UserName;
-                        var email = loginResponse["email"]?.ToString() ?? string.Empty;
-                        var role = loginResponse["role"]?.ToString() ?? "User";
+                        IsPersistent = false,
+                        ExpiresUtc = loginResponse.TokenExpiration
+                    });
 
-                        // Store user info in session
-                        HttpContext.Session.SetString("UserName", userName);
-                        HttpContext.Session.SetString("Email", email);
-                        HttpContext.Session.SetString("Role", role);
-                        HttpContext.Session.SetString("UserRole", role);
+                _logger.LogInformation(
+                    "User {UserName} logged in as {Role}",
+                    loginResponse.UserName,
+                    loginResponse.Role);
 
-                        // Create claims for cookie authentication
-                        var claims = new List<Claim>
-                        {
-                            new Claim(ClaimTypes.Name, userName),
-                            new Claim(ClaimTypes.Email, email),
-                            new Claim(ClaimTypes.Role, role)
-                        };
-
-                        var claimsIdentity = new ClaimsIdentity(claims, "CookieAuth");
-                        var authProperties = new AuthenticationProperties
-                        {
-                            IsPersistent = false,
-                            ExpiresUtc = DateTimeOffset.UtcNow.AddHours(1)
-                        };
-
-                        await HttpContext.SignInAsync("CookieAuth",
-                            new ClaimsPrincipal(claimsIdentity),
-                            authProperties);
-
-                        _logger.LogInformation($"User logged in successfully: {userName}");
-                        return RedirectToPage("/Index");
-                    }
-                }
-                else
-                {
-                    ErrorMessage = "Invalid username. Please check and try again.";
-                    _logger.LogWarning($"Login attempt failed for user: {UserName}");
-                }
+                return RedirectToPage("/CollectionItems/Index");
             }
-            catch (Exception ex)
+            catch (HttpRequestException ex)
             {
-                ErrorMessage = "An error occurred during login. Please try again.";
-                _logger.LogError($"Error during login: {ex.Message}");
+                ErrorMessage = "The ArcaneVault API is unavailable. Start both projects and try again.";
+                _logger.LogError(ex, "API connection failed during login");
+                return Page();
             }
-
-            return Page();
         }
     }
 }

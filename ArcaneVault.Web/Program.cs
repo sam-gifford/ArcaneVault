@@ -1,5 +1,7 @@
 // Name: Gifford | Admin No: 252266P | Tutorial Group: IT2814-06
 
+using ArcaneVault.Web.Services;
+
 namespace ArcaneVault.Web
 {
     public class Program
@@ -32,13 +34,16 @@ namespace ArcaneVault.Web
 
             // Add authorization
             builder.Services.AddAuthorization();
+            builder.Services.AddHttpContextAccessor();
+            builder.Services.AddTransient<ApiAuthorizationHandler>();
 
             // Add HttpClient for API communication
-            var apiBaseUrl = builder.Configuration["ApiSettings:BaseUrl"] ?? "https://localhost:7001";
+            var apiBaseUrl = builder.Configuration["ApiSettings:BaseUrl"] ?? "https://localhost:7110";
             builder.Services.AddHttpClient("ApiClient", client =>
             {
                 client.BaseAddress = new Uri(apiBaseUrl);
-            });
+            })
+            .AddHttpMessageHandler<ApiAuthorizationHandler>();
 
             var app = builder.Build();
 
@@ -51,6 +56,7 @@ namespace ArcaneVault.Web
             }
 
             app.UseHttpsRedirection();
+            app.UseRouting();
 
             // Use session middleware
             app.UseSession();
@@ -58,8 +64,6 @@ namespace ArcaneVault.Web
             // Use authentication and authorization
             app.UseAuthentication();
             app.UseAuthorization();
-
-            app.UseRouting();
 
             app.MapStaticAssets();
             app.MapRazorPages()
@@ -69,4 +73,3 @@ namespace ArcaneVault.Web
         }
     }
 }
-

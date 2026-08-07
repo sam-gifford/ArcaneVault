@@ -1,7 +1,5 @@
 // Name: Gifford | Admin No: 252266P | Tutorial Group: IT2814-06
 
-// Name: [Your Name] | Admin No: [Your Admin No] | Tutorial Group: [Your Group]
-
 using System.ComponentModel.DataAnnotations;
 
 namespace ArcaneVault.API.DTOs
